@@ -1,0 +1,99 @@
+# SIH 26006 — Intelligent Freight Forecasting Platform
+
+Project foundation (Phase 1) for a system that will forecast freight rates, recommend
+chartering timing and vessel types, and surface risk warnings for bulk cargo procurement
+into the East Coast of India.
+
+**Status: Phase 1 only.** No forecasting model, no datasets, no authentication, no external
+integrations. The official problem statement provides no dataset; the data strategy is
+deliberately deferred.
+
+## Stack
+
+| Layer     | Technology                                  |
+| --------- | ------------------------------------------- |
+| Frontend  | Next.js (App Router), TypeScript, Tailwind  |
+| API       | FastAPI, Pydantic                           |
+| Data/ML   | pandas, numpy, scikit-learn (not yet used)  |
+| Database  | PostgreSQL via SQLAlchemy + Alembic         |
+
+## Layout
+
+```
+backend/
+  app/
+    api/routes/       API route modules (health)
+    core/             settings/configuration
+    db/               SQLAlchemy base and session
+    models/           ORM models (empty)
+    schemas/          Pydantic schemas
+    services/         business logic (empty)
+  alembic/            migration environment
+  tests/              pytest suite
+frontend/
+  src/app/            App Router pages
+  src/components/     UI components
+  src/lib/            API client
+```
+
+## Backend setup
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --port 8000
+```
+
+- Health endpoint: http://localhost:8000/api/v1/health
+- OpenAPI docs: http://localhost:8000/docs
+
+The app starts without a running PostgreSQL instance: connections are lazy and the health
+endpoint reports `"database": "unavailable"` when the database cannot be reached.
+
+Run tests:
+
+```bash
+cd backend && .venv/bin/python -m pytest
+```
+
+## Database and migrations
+
+Set `DATABASE_URL` in `backend/.env` (see `backend/.env.example`). Once a PostgreSQL
+instance exists:
+
+```bash
+cd backend
+alembic revision --autogenerate -m "message"
+alembic upgrade head
+```
+
+## Frontend setup
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open http://localhost:3000 — the page calls the backend health endpoint and shows the
+result. Checks:
+
+```bash
+npm run lint
+npm run build
+```
+
+## Environment variables
+
+| File                    | Variable                   | Purpose                        |
+| ----------------------- | -------------------------- | ------------------------------ |
+| `backend/.env`          | `ENVIRONMENT`              | environment label              |
+| `backend/.env`          | `DATABASE_URL`             | PostgreSQL connection string   |
+| `backend/.env`          | `CORS_ORIGINS`             | comma-separated allowed origins|
+| `frontend/.env.local`   | `NEXT_PUBLIC_API_BASE_URL` | backend API base URL           |
+
+Never commit real secrets; only `.env.example` files are tracked.
