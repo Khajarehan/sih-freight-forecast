@@ -106,6 +106,13 @@ with SessionLocal() as session:
     session.commit()
 ```
 
+## Orchestration
+
+`airflow/` holds a local-development Airflow stack with a `synthetic_ingestion` DAG
+that calls the ingestion services above (it contains no ingestion logic of its own).
+See [airflow/README.md](airflow/README.md). Airflow keeps its own dependency environment and is not part
+of `backend/requirements.txt`.
+
 ## Frontend setup
 
 ```bash
