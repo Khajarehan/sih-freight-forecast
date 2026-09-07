@@ -70,6 +70,11 @@ alembic revision --autogenerate -m "message"
 alembic upgrade head
 ```
 
+The schema is split into a core migration (all tables, plain PostgreSQL) and an
+isolated TimescaleDB migration that converts the time-series tables into
+hypertables. The TimescaleDB step is a no-op unless `TIMESCALE_ENABLED=true`, and
+fails explicitly if it is requested on a server without the extension.
+
 ## Frontend setup
 
 ```bash
@@ -93,6 +98,7 @@ npm run build
 | ----------------------- | -------------------------- | ------------------------------ |
 | `backend/.env`          | `ENVIRONMENT`              | environment label              |
 | `backend/.env`          | `DATABASE_URL`             | PostgreSQL connection string   |
+| `backend/.env`          | `TIMESCALE_ENABLED`        | enable the hypertable migration|
 | `backend/.env`          | `CORS_ORIGINS`             | comma-separated allowed origins|
 | `frontend/.env.local`   | `NEXT_PUBLIC_API_BASE_URL` | backend API base URL           |
 

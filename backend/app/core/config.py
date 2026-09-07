@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/freight"
+    timescale_enabled: bool = False
 
     cors_origins: str = "http://localhost:3000"
 
