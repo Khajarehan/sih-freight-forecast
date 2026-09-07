@@ -25,9 +25,10 @@ backend/
     api/routes/       API route modules (health)
     core/             settings/configuration
     db/               SQLAlchemy base and session
-    models/           ORM models (empty)
+    models/           ORM models
     schemas/          Pydantic schemas
-    services/         business logic (empty)
+    services/
+      ingestion/      source contracts, validation, normalization, persistence
   alembic/            migration environment
   tests/              pytest suite
 frontend/
@@ -59,6 +60,14 @@ Run tests:
 cd backend && .venv/bin/python -m pytest
 ```
 
+Database-backed tests are skipped unless `TEST_DATABASE_URL` points at a disposable
+PostgreSQL database:
+
+```bash
+cd backend && TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/freight_test \
+  .venv/bin/python -m pytest
+```
+
 ## Database and migrations
 
 Set `DATABASE_URL` in `backend/.env` (see `backend/.env.example`). Once a PostgreSQL
@@ -74,6 +83,28 @@ The schema is split into a core migration (all tables, plain PostgreSQL) and an
 isolated TimescaleDB migration that converts the time-series tables into
 hypertables. The TimescaleDB step is a no-op unless `TIMESCALE_ENABLED=true`, and
 fails explicitly if it is requested on a server without the extension.
+
+## Data ingestion
+
+`app/services/ingestion/` implements the pipeline `raw payload -> contract validation ->
+normalization -> persistence`. Each source has a pipeline function taking a SQLAlchemy
+session and raw payloads, so an orchestrator (Airflow later) calls these services rather
+than containing the ingestion logic. Every observation carries `ingestion_run_id`, and
+`ingestion_run.is_synthetic` marks non-real data.
+
+`app/services/ingestion/synthetic.py` generates a seeded, fabricated development dataset
+(Baltic indices, freight rates, VLSFO prices, AIS positions, weather, tides). It is not
+market data and is not calibrated against real markets; it is always ingested with
+`is_synthetic=True`.
+
+```python
+from app.db.session import SessionLocal
+from app.services.ingestion.synthetic import seed_synthetic_dataset
+
+with SessionLocal() as session:
+    seed_synthetic_dataset(session, days=180)
+    session.commit()
+```
 
 ## Frontend setup
 
