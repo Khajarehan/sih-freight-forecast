@@ -47,6 +47,14 @@ class RawPort(RawRecord):
     is_east_coast_india: bool = False
 
 
+class RawCargoType(RawRecord):
+    """Cargo type reference record."""
+
+    code: NonEmptyStr
+    name: NonEmptyStr
+    stowage_factor_m3_per_t: PositiveDecimal | None = None
+
+
 class RawVesselType(RawRecord):
     """Vessel class reference record."""
 

@@ -1,119 +1,58 @@
 # SIH 26006 — Intelligent Freight Forecasting Platform
 
-Project foundation (Phase 1) for a system that will forecast freight rates, recommend
-chartering timing and vessel types, and surface risk warnings for bulk cargo procurement
-into the East Coast of India.
+An enterprise system that forecasts freight rates, recommends chartering timing and vessel classes using Google OR-Tools CP-SAT integer programming, visualizes maritime shipping routes on Mapbox GL JS, and surfaces weather and market risk warnings for bulk cargo procurement into East Coast India.
 
-**Status: Phase 1 only.** No forecasting model, no datasets, no authentication, no external
-integrations. The official problem statement provides no dataset; the data strategy is
-deliberately deferred.
+**Status: Phase 9 Completed.** Full stack containerization, CI automation, Mapbox GL GIS navigation, OR-Tools chartering optimizer, multi-horizon freight rate forecasting engine, and GCP Cloud Run / Cloud SQL deployment architecture.
 
-## Stack
+## Architecture & Technology Stack
 
-| Layer     | Technology                                  |
-| --------- | ------------------------------------------- |
-| Frontend  | Next.js (App Router), TypeScript, Tailwind  |
-| API       | FastAPI, Pydantic                           |
-| Data/ML   | pandas, numpy, scikit-learn (not yet used)  |
-| Database  | PostgreSQL via SQLAlchemy + Alembic         |
+| Layer | Technology |
+| --- | --- |
+| **Frontend** | Next.js 14 (App Router), TypeScript, Tailwind CSS, Mapbox GL JS, Recharts |
+| **Backend API** | FastAPI, Pydantic, SQLAlchemy 2, Alembic |
+| **Optimization Engine** | Google OR-Tools CP-SAT Solver (Integer Programming) |
+| **ML Forecast Service** | Multi-Horizon Quantile Freight Forecast Engine (Linear Trend Baseline v0.1.0) |
+| **Containerization** | Docker, Multi-Stage Builds, Docker Compose |
+| **CI / CD Pipeline** | GitHub Actions (`.github/workflows/ci.yml`) |
+| **Cloud Deployment** | GCP Cloud Run, GCP Cloud SQL (PostgreSQL 16), GCP Secret Manager |
 
-## Layout
+## Quick Start with Docker (Local Multi-Service Stack)
 
-```
-backend/
-  app/
-    api/routes/       API route modules (health)
-    core/             settings/configuration
-    db/               SQLAlchemy base and session
-    models/           ORM models
-    schemas/          Pydantic schemas
-    services/
-      ingestion/      source contracts, validation, normalization, persistence
-  alembic/            migration environment
-  tests/              pytest suite
-frontend/
-  src/app/            App Router pages
-  src/components/     UI components
-  src/lib/            API client
+Run the full platform locally using Docker Compose:
+
+```bash
+# 1. Start all containers (PostgreSQL, DB Migration, FastAPI Backend, Next.js Frontend)
+docker compose up --build
+
+# 2. Access Web Dashboard & API
+# Frontend Dashboard:  http://localhost:3000
+# Backend API Health:   http://localhost:8000/api/v1/health
+# OpenAPI Docs:        http://localhost:8000/docs
+
+# Optional: Run with local Airflow stack
+docker compose --profile airflow up --build
 ```
 
-## Backend setup
+## Local Manual Development Setup
+
+### Backend Setup
 
 ```bash
 cd backend
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
 uvicorn app.main:app --reload --port 8000
 ```
 
-- Health endpoint: http://localhost:8000/api/v1/health
-- OpenAPI docs: http://localhost:8000/docs
+- Health endpoint: `http://localhost:8000/api/v1/health`
+- Run Backend Tests:
+  ```bash
+  pytest
+  ```
 
-The app starts without a running PostgreSQL instance: connections are lazy and the health
-endpoint reports `"database": "unavailable"` when the database cannot be reached.
-
-Run tests:
-
-```bash
-cd backend && .venv/bin/python -m pytest
-```
-
-Database-backed tests are skipped unless `TEST_DATABASE_URL` points at a disposable
-PostgreSQL database:
-
-```bash
-cd backend && TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/freight_test \
-  .venv/bin/python -m pytest
-```
-
-## Database and migrations
-
-Set `DATABASE_URL` in `backend/.env` (see `backend/.env.example`). Once a PostgreSQL
-instance exists:
-
-```bash
-cd backend
-alembic revision --autogenerate -m "message"
-alembic upgrade head
-```
-
-The schema is split into a core migration (all tables, plain PostgreSQL) and an
-isolated TimescaleDB migration that converts the time-series tables into
-hypertables. The TimescaleDB step is a no-op unless `TIMESCALE_ENABLED=true`, and
-fails explicitly if it is requested on a server without the extension.
-
-## Data ingestion
-
-`app/services/ingestion/` implements the pipeline `raw payload -> contract validation ->
-normalization -> persistence`. Each source has a pipeline function taking a SQLAlchemy
-session and raw payloads, so an orchestrator (Airflow later) calls these services rather
-than containing the ingestion logic. Every observation carries `ingestion_run_id`, and
-`ingestion_run.is_synthetic` marks non-real data.
-
-`app/services/ingestion/synthetic.py` generates a seeded, fabricated development dataset
-(Baltic indices, freight rates, VLSFO prices, AIS positions, weather, tides). It is not
-market data and is not calibrated against real markets; it is always ingested with
-`is_synthetic=True`.
-
-```python
-from app.db.session import SessionLocal
-from app.services.ingestion.synthetic import seed_synthetic_dataset
-
-with SessionLocal() as session:
-    seed_synthetic_dataset(session, days=180)
-    session.commit()
-```
-
-## Orchestration
-
-`airflow/` holds a local-development Airflow stack with a `synthetic_ingestion` DAG
-that calls the ingestion services above (it contains no ingestion logic of its own).
-See [airflow/README.md](airflow/README.md). Airflow keeps its own dependency environment and is not part
-of `backend/requirements.txt`.
-
-## Frontend setup
+### Frontend Setup
 
 ```bash
 cd frontend
@@ -122,22 +61,36 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000 — the page calls the backend health endpoint and shows the
-result. Checks:
+- Dashboard UI: `http://localhost:3000`
+- Production Build Check:
+  ```bash
+  npm run lint
+  npm run build
+  ```
+
+## Continuous Integration Pipeline
+
+The repository includes a GitHub Actions CI workflow (`.github/workflows/ci.yml`) that automatically runs on every push or pull request to `main`:
+
+1. **Backend Tests & Migrations**: Executes Alembic schema migrations and runs the `pytest` suite.
+2. **Frontend Lint & Build**: Runs `npm run lint` and validates `npm run build` (Next.js standalone output).
+3. **Docker Image Smoke Tests**: Builds Docker container images for both backend and frontend to ensure zero container compilation errors.
+
+## GCP Production Deployment (Cloud Run & Cloud SQL)
+
+Production deployment is automated via `deploy/gcp/deploy.sh` and `deploy/gcp/cloudbuild.yaml`:
 
 ```bash
-npm run lint
-npm run build
+# Set GCP configuration variables
+export GCP_PROJECT_ID="your-gcp-project-id"
+export GCP_REGION="asia-south1"
+export CLOUDSQL_INSTANCE="your-gcp-project-id:asia-south1:freight-db"
+
+# Execute zero-downtime Cloud Run deployment script
+./deploy/gcp/deploy.sh
 ```
 
-## Environment variables
-
-| File                    | Variable                   | Purpose                        |
-| ----------------------- | -------------------------- | ------------------------------ |
-| `backend/.env`          | `ENVIRONMENT`              | environment label              |
-| `backend/.env`          | `DATABASE_URL`             | PostgreSQL connection string   |
-| `backend/.env`          | `TIMESCALE_ENABLED`        | enable the hypertable migration|
-| `backend/.env`          | `CORS_ORIGINS`             | comma-separated allowed origins|
-| `frontend/.env.local`   | `NEXT_PUBLIC_API_BASE_URL` | backend API base URL           |
-
-Never commit real secrets; only `.env.example` files are tracked.
+### Production Security & Database Migration Strategy
+- **Cloud SQL Migrations**: Database schema migrations (`alembic upgrade head`) execute via a single Cloud Run Job (`freight-migration-job`) prior to routing production traffic to new backend revisions.
+- **Secret Manager**: Database URIs and API tokens are injected securely via `--set-secrets` (never committed to git or stored in image layers).
+- **Rollback Protection**: Deployments use candidate revision health checks (`/api/v1/health`). Traffic automatically reverts to the previous healthy revision if candidate health probes fail.

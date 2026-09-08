@@ -29,6 +29,7 @@ SYNTHETIC_SOURCES: dict[str, SyntheticSource] = {
         session,
         ports=dataset.ports,
         vessel_types=dataset.vessel_types,
+        cargo_types=dataset.cargo_types,
         routes=dataset.routes,
         vessels=dataset.vessels,
         is_synthetic=True,
@@ -86,14 +87,19 @@ def run_synthetic_source(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run an ingestion pipeline for one source.")
-    parser.add_argument("--source", required=True, choices=sorted(SYNTHETIC_SOURCES))
+    parser = argparse.ArgumentParser(description="Run an ingestion pipeline for one or all sources.")
+    parser.add_argument("--source", choices=sorted(SYNTHETIC_SOURCES) + ["all"], default="all")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS)
     arguments = parser.parse_args(argv)
 
-    summary = run_synthetic_source(arguments.source, seed=arguments.seed, days=arguments.days)
-    print(json.dumps(summary))
+    if arguments.source == "all":
+        sources_to_run = ["reference"] + [s for s in sorted(SYNTHETIC_SOURCES) if s != "reference"]
+        summaries = [run_synthetic_source(src, seed=arguments.seed, days=arguments.days) for src in sources_to_run]
+        print(json.dumps(summaries))
+    else:
+        summary = run_synthetic_source(arguments.source, seed=arguments.seed, days=arguments.days)
+        print(json.dumps(summary))
     return 0
 
 

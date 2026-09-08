@@ -7,9 +7,20 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# pool_pre_ping keeps the app importable and startable without a live database;
-# connections are only established lazily on first use.
-engine = create_engine(settings.database_url, pool_pre_ping=True, future=True)
+engine_kwargs = {
+    "pool_pre_ping": True,
+    "future": True,
+}
+
+# Apply pool configuration for non-sqlite engines
+if not settings.database_url.startswith("sqlite"):
+    engine_kwargs.update({
+        "pool_size": settings.db_pool_size,
+        "max_overflow": settings.db_max_overflow,
+        "pool_recycle": settings.db_pool_recycle,
+    })
+
+engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
 
 

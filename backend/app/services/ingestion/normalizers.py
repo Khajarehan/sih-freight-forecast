@@ -7,6 +7,7 @@ attach ingestion provenance, and return unattached ORM objects.
 from app.models import (
     BalticIndexValue,
     BunkerPrice,
+    CargoType,
     Port,
     PortTideObservation,
     PortWeatherObservation,
@@ -35,6 +36,14 @@ def normalize_port(raw: c.RawPort) -> Port:
     )
 
 
+def normalize_cargo_type(raw: c.RawCargoType) -> CargoType:
+    return CargoType(
+        code=raw.code,
+        name=raw.name,
+        stowage_factor_m3_per_t=raw.stowage_factor_m3_per_t,
+    )
+
+
 def normalize_vessel_type(raw: c.RawVesselType) -> VesselType:
     return VesselType(
         code=raw.code,
@@ -45,6 +54,7 @@ def normalize_vessel_type(raw: c.RawVesselType) -> VesselType:
         typical_beam_m=raw.typical_beam_m,
         typical_draft_m=raw.typical_draft_m,
     )
+
 
 
 def normalize_route(raw: c.RawRoute, resolver: ReferenceResolver) -> Route:

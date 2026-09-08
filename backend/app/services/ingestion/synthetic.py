@@ -122,9 +122,29 @@ VESSEL_TYPES: list[dict[str, Any]] = [
     },
 ]
 
+CARGO_TYPES: list[dict[str, Any]] = [
+    {"code": "THERMAL_COAL", "name": "Thermal Coal", "stowage_factor_m3_per_t": Decimal("0.800")},
+    {"code": "COKING_COAL", "name": "Coking Coal", "stowage_factor_m3_per_t": Decimal("0.780")},
+    {"code": "IRON_ORE", "name": "Iron Ore", "stowage_factor_m3_per_t": Decimal("0.380")},
+    {"code": "BAUXITE", "name": "Bauxite", "stowage_factor_m3_per_t": Decimal("0.550")},
+]
+
 ORIGIN_UNLOCODES = ["AUNTL", "ZARBY", "IDSMQ"]
 DESTINATION_UNLOCODES = ["INPRT", "INVTZ", "INENR"]
 BALTIC_INDEX_BASE = {"BCI": Decimal("2100"), "BPI": Decimal("1500"), "BSI": Decimal("1200")}
+
+# Fabricated distances in nautical miles for each origin → destination pair.
+ROUTE_DISTANCES: dict[tuple[str, str], Decimal] = {
+    ("AUNTL", "INPRT"): Decimal("6520.0"),
+    ("AUNTL", "INVTZ"): Decimal("6350.0"),
+    ("AUNTL", "INENR"): Decimal("6080.0"),
+    ("ZARBY", "INPRT"): Decimal("4780.0"),
+    ("ZARBY", "INVTZ"): Decimal("4610.0"),
+    ("ZARBY", "INENR"): Decimal("4890.0"),
+    ("IDSMQ", "INPRT"): Decimal("3540.0"),
+    ("IDSMQ", "INVTZ"): Decimal("3370.0"),
+    ("IDSMQ", "INENR"): Decimal("3150.0"),
+}
 
 
 @dataclass
@@ -134,6 +154,7 @@ class SyntheticDataset:
     is_synthetic: bool = True
     ports: list[dict[str, Any]] = field(default_factory=list)
     vessel_types: list[dict[str, Any]] = field(default_factory=list)
+    cargo_types: list[dict[str, Any]] = field(default_factory=list)
     routes: list[dict[str, Any]] = field(default_factory=list)
     vessels: list[dict[str, Any]] = field(default_factory=list)
     baltic_index_values: list[dict[str, Any]] = field(default_factory=list)
@@ -157,10 +178,16 @@ def generate_dataset(
 ) -> SyntheticDataset:
     """Generate an internally consistent fabricated dataset for `days` days."""
     rng = random.Random(seed)
-    dataset = SyntheticDataset(ports=list(PORTS), vessel_types=list(VESSEL_TYPES))
+    dataset = SyntheticDataset(
+        ports=list(PORTS), vessel_types=list(VESSEL_TYPES), cargo_types=list(CARGO_TYPES),
+    )
 
     dataset.routes = [
-        {"origin_unlocode": origin, "destination_unlocode": destination}
+        {
+            "origin_unlocode": origin,
+            "destination_unlocode": destination,
+            "distance_nm": ROUTE_DISTANCES.get((origin, destination)),
+        }
         for origin in ORIGIN_UNLOCODES
         for destination in DESTINATION_UNLOCODES
     ]
@@ -269,10 +296,12 @@ def seed_synthetic_dataset(
             session,
             ports=dataset.ports,
             vessel_types=dataset.vessel_types,
+            cargo_types=dataset.cargo_types,
             routes=dataset.routes,
             vessels=dataset.vessels,
             is_synthetic=True,
         ),
+
         "baltic_index_values": pipelines.ingest_baltic_index_values(
             session, dataset.baltic_index_values, is_synthetic=True
         ),

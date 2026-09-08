@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Port, Route, Vessel, VesselType
+from app.models import CargoType, Port, Route, Vessel, VesselType
 from app.services.ingestion import contracts as c
 from app.services.ingestion import normalizers as n
 from app.services.ingestion.persistence import SourceCode, ingestion_run, persist_records
@@ -118,6 +118,7 @@ def ingest_reference_data(
     *,
     ports: Sequence[Mapping[str, Any]] = (),
     vessel_types: Sequence[Mapping[str, Any]] = (),
+    cargo_types: Sequence[Mapping[str, Any]] = (),
     routes: Sequence[Mapping[str, Any]] = (),
     vessels: Sequence[Mapping[str, Any]] = (),
     is_synthetic: bool = False,
@@ -125,6 +126,7 @@ def ingest_reference_data(
     """Upsert reference/master data by natural key."""
     raw_ports = validate_payloads(c.RawPort, ports).accepted
     raw_types = validate_payloads(c.RawVesselType, vessel_types).accepted
+    raw_cargo_types = validate_payloads(c.RawCargoType, cargo_types).accepted
     raw_routes = validate_payloads(c.RawRoute, routes).accepted
     raw_vessels = validate_payloads(c.RawVessel, vessels).accepted
 
@@ -135,6 +137,10 @@ def ingest_reference_data(
         for raw_type in raw_types:
             rows += _upsert(
                 session, VesselType, {"code": raw_type.code}, n.normalize_vessel_type(raw_type)
+            )
+        for raw_cargo in raw_cargo_types:
+            rows += _upsert(
+                session, CargoType, {"code": raw_cargo.code}, n.normalize_cargo_type(raw_cargo)
             )
         session.flush()
 

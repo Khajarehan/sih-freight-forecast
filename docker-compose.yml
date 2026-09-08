@@ -1,0 +1,100 @@
+version: "3.8"
+
+services:
+  # ============================================================================
+  # 1. PostgreSQL Database Service
+  # ============================================================================
+  app-db:
+    image: postgres:16
+    container_name: freight-app-db
+    environment:
+      POSTGRES_USER: ${APP_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${APP_DB_NAME:-freight}
+    ports:
+      - "${APP_DB_PORT:-5432}:5432"
+    volumes:
+      - app-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - freight-network
+
+  # ============================================================================
+  # 2. Database Schema Migration Runner Service (Alembic)
+  # ============================================================================
+  db-migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: freight-db-migrate
+    command: sh -c "alembic upgrade head && python -m app.services.ingestion.cli"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-postgres}:${APP_DB_PASSWORD:-postgres}@app-db:5432/${APP_DB_NAME:-freight}
+    depends_on:
+      app-db:
+        condition: service_healthy
+    networks:
+      - freight-network
+
+  # ============================================================================
+  # 3. FastAPI Backend Service (SIH Freight Forecast & OR-Tools Optimization)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: freight-backend
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-postgres}:${APP_DB_PASSWORD:-postgres}@app-db:5432/${APP_DB_NAME:-freight}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      app-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - freight-network
+
+  # ============================================================================
+  # 4. Next.js Standalone Frontend Service (Dashboard & Mapbox Map)
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: freight-frontend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN:-""}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - freight-network
+
+networks:
+  freight-network:
+    driver: bridge
+
+volumes:
+  app-db-data:
