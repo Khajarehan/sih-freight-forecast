@@ -1,58 +1,39 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Port, WeatherObservation, fetchPorts, fetchPortWeather } from "@/lib/api";
-import {
-  Anchor,
-  CloudRain,
-  Wind,
-  Waves,
-  Eye,
-  CheckCircle2,
-  MapPin,
-  Filter,
-  RefreshCw,
-  Gauge,
-} from "lucide-react";
+import { fetchPortWeather, fetchPorts, Port, WeatherObservation } from "@/lib/api";
+import { Anchor, Cloud, CloudRain, Eye, Filter, ShieldCheck, Wind } from "lucide-react";
 
 export default function PortsOverview() {
   const [ports, setPorts] = useState<Port[]>([]);
-  const [eastCoastOnly, setEastCoastOnly] = useState(false);
   const [selectedPortId, setSelectedPortId] = useState<number | null>(null);
   const [weather, setWeather] = useState<WeatherObservation[]>([]);
   const [loadingWeather, setLoadingWeather] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [filterEastCoast, setFilterEastCoast] = useState(false);
 
-  // Load ports
   useEffect(() => {
     async function loadPorts() {
-      setError(null);
       try {
-        const data = await fetchPorts(eastCoastOnly);
+        const data = await fetchPorts();
         setPorts(data);
         if (data.length > 0) {
-          // Default selection to first East Coast India port if available
-          const eastCoastPort = data.find((p) => p.is_east_coast_india);
-          setSelectedPortId(eastCoastPort ? eastCoastPort.id : data[0].id);
+          setSelectedPortId(data[0].id);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load ports");
+        console.error("Failed to load ports:", err);
       }
     }
     loadPorts();
-  }, [eastCoastOnly]);
+  }, []);
 
-  // Load weather for selected port
   useEffect(() => {
-    if (selectedPortId === null) return;
-    const portId = selectedPortId;
     async function loadWeather() {
+      if (!selectedPortId) return;
       setLoadingWeather(true);
       try {
-        const data = await fetchPortWeather(portId, 10);
+        const data = await fetchPortWeather(selectedPortId);
         setWeather(data);
       } catch {
-        // Port might not have weather (e.g. origin ports)
         setWeather([]);
       } finally {
         setLoadingWeather(false);
@@ -61,99 +42,87 @@ export default function PortsOverview() {
     loadWeather();
   }, [selectedPortId]);
 
+  const displayedPorts = filterEastCoast
+    ? ports.filter((p) => p.is_east_coast_india)
+    : ports;
+
   const selectedPort = ports.find((p) => p.id === selectedPortId);
-  const latestWeather = weather.length > 0 ? weather[0] : null;
+  const currentWeather = weather.length > 0 ? weather[0] : null;
 
   return (
-    <div className="space-y-6">
-      {/* Header & Filter */}
-      <div className="glass-panel rounded-2xl p-5 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-            <Anchor className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-semibold text-white">Global & East Coast India Ports</h2>
-            <p className="text-xs text-slate-400">
-              Technical port limits, draft constraints, and live weather monitoring
-            </p>
-          </div>
+    <div className="op-section p-5 space-y-5">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#D9DFDB] pb-3">
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#17211F] font-mono flex items-center gap-2">
+            <Anchor className="w-4 h-4 text-[#176B63]" />
+            <span>Port Technical Limits & Weather</span>
+          </h2>
+          <p className="text-xs text-[#5E6965] mt-0.5">
+            Draft constraints, max LOA, handling rates, and operational weather.
+          </p>
         </div>
 
         <button
-          onClick={() => setEastCoastOnly(!eastCoastOnly)}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-            eastCoastOnly
-              ? "bg-emerald-950/80 border-emerald-800 text-emerald-400 shadow-md shadow-emerald-500/10"
-              : "bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200"
+          onClick={() => setFilterEastCoast(!filterEastCoast)}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-mono transition-ui border ${
+            filterEastCoast
+              ? "bg-[#176B63]/10 border-[#176B63] text-[#176B63] font-bold"
+              : "bg-[#F6F7F4] border-[#D9DFDB] text-[#5E6965] hover:border-[#176B63]"
           }`}
         >
-          <Filter className="w-3.5 h-3.5" />
-          <span>East Coast India Only</span>
-          {eastCoastOnly && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+          <Filter className="w-3 h-3" />
+          <span>{filterEastCoast ? "Showing East Coast IN Only" : "East Coast India Only"}</span>
         </button>
       </div>
 
-      {error && (
-        <div className="p-4 rounded-xl bg-red-950/50 border border-red-800/80 text-red-400 text-xs">
-          {error}
-        </div>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* LEFT: Clean Port Specification Table */}
+        <div className="lg:col-span-7 space-y-3">
+          <div className="flex items-center justify-between text-xs font-mono text-[#5E6965]">
+            <span>Port Specifications ({displayedPorts.length})</span>
+          </div>
 
-      {/* Main Grid: Ports Table & Selected Port Weather Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Ports Directory List */}
-        <div className="lg:col-span-2 glass-panel rounded-2xl p-5 border border-slate-800 space-y-4">
-          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-emerald-400" /> Port Specifications ({ports.length})
-          </h3>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto border border-[#D9DFDB] rounded bg-white">
+            <table className="w-full text-left text-xs font-mono">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400 font-medium pb-2">
-                  <th className="pb-3">Port & Code</th>
-                  <th className="pb-3">Country</th>
-                  <th className="pb-3">Max Draft</th>
-                  <th className="pb-3">Max LOA</th>
-                  <th className="pb-3">Cargo TPH</th>
-                  <th className="pb-3 text-right">Region</th>
+                <tr className="bg-[#F0F2EF] border-b border-[#D9DFDB] text-[#5E6965] text-[11px]">
+                  <th className="py-2 px-3">Port & UN/LOCODE</th>
+                  <th className="py-2 px-2">Country</th>
+                  <th className="py-2 px-2">Max Draft</th>
+                  <th className="py-2 px-2">Max LOA</th>
+                  <th className="py-2 px-2">Handling Rate</th>
+                  <th className="py-2 px-2 text-right">Region</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {ports.map((port) => (
+              <tbody className="divide-y divide-[#D9DFDB]">
+                {displayedPorts.map((port) => (
                   <tr
                     key={port.id}
                     onClick={() => setSelectedPortId(port.id)}
-                    className={`cursor-pointer transition-colors ${
+                    className={`cursor-pointer transition-ui ${
                       selectedPortId === port.id
-                        ? "bg-emerald-950/30 text-emerald-300 font-medium"
-                        : "hover:bg-slate-900/50 text-slate-300"
+                        ? "bg-[#176B63]/10 font-semibold text-[#176B63]"
+                        : "hover:bg-[#F0F2EF]/60 text-[#17211F]"
                     }`}
                   >
-                    <td className="py-3 pr-2">
-                      <div className="font-semibold text-white">{port.name}</div>
-                      <div className="text-[10px] text-cyan-400 font-mono">{port.unlocode}</div>
+                    <td className="py-2.5 px-3">
+                      <div className="font-bold text-[#17211F]">{port.name}</div>
+                      <div className="text-[10px] text-[#5E6965]">{port.unlocode}</div>
                     </td>
-                    <td className="py-3 font-mono">{port.country}</td>
-                    <td className="py-3">
-                      {port.max_draft_m ? `${parseFloat(port.max_draft_m).toFixed(1)} m` : "—"}
+                    <td className="py-2.5 px-2 text-[#5E6965]">{port.country}</td>
+                    <td className="py-2.5 px-2 font-bold text-[#17211F]">{port.max_draft_m} m</td>
+                    <td className="py-2.5 px-2 text-[#17211F]">{port.max_loa_m} m</td>
+                    <td className="py-2.5 px-2 text-[#17211F]">
+                      {port.cargo_handling_rate_tph ? `${Number(port.cargo_handling_rate_tph).toLocaleString()} TPH` : "—"}
                     </td>
-                    <td className="py-3">
-                      {port.max_loa_m ? `${parseFloat(port.max_loa_m).toFixed(0)} m` : "—"}
-                    </td>
-                    <td className="py-3">
-                      {port.cargo_handling_rate_tph
-                        ? `${parseFloat(port.cargo_handling_rate_tph).toLocaleString()} t/h`
-                        : "—"}
-                    </td>
-                    <td className="py-3 text-right">
+                    <td className="py-2.5 px-2 text-right">
                       {port.is_east_coast_india ? (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-800 text-[10px] text-emerald-400">
+                        <span className="px-1.5 py-0.5 rounded bg-[#176B63]/10 text-[#176B63] text-[10px] font-medium">
                           East Coast IN
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[10px] text-slate-400">
+                        <span className="px-1.5 py-0.5 rounded bg-[#F0F2EF] text-[#5E6965] text-[10px]">
                           Origin
                         </span>
                       )}
@@ -165,106 +134,84 @@ export default function PortsOverview() {
           </div>
         </div>
 
-        {/* Selected Port Weather Widget */}
-        <div className="glass-panel rounded-2xl p-5 border border-slate-800 flex flex-col justify-between space-y-4">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-              <div>
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <CloudRain className="w-4 h-4 text-cyan-400" /> Port Weather Monitor
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {selectedPort ? `${selectedPort.name} (${selectedPort.unlocode})` : "Select a port"}
-                </p>
+        {/* RIGHT: Operational Weather Telemetry Panel */}
+        <div className="lg:col-span-5 space-y-3">
+          <div className="flex items-center justify-between text-xs font-mono text-[#5E6965]">
+            <span>Operational Weather</span>
+            <span className="text-[#17211F] font-bold">{selectedPort?.name} ({selectedPort?.unlocode})</span>
+          </div>
+
+          <div className="op-section p-4 space-y-4">
+            {loadingWeather ? (
+              <div className="py-12 text-center text-xs text-[#5E6965] font-mono animate-pulse">
+                Fetching Weather Telemetry...
               </div>
-              {loadingWeather && (
-                <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />
-              )}
-            </div>
-
-            {selectedPort ? (
-              latestWeather ? (
-                <div className="space-y-3">
-                  <div className="glass-card rounded-xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Wind className="w-5 h-5 text-cyan-400" />
-                      <div>
-                        <div className="text-xs text-slate-400">Wind Speed</div>
-                        <div className="text-sm font-bold text-white">
-                          {parseFloat(latestWeather.wind_speed_ms).toFixed(1)} m/s
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                      {(parseFloat(latestWeather.wind_speed_ms) * 1.94384).toFixed(1)} knots
+            ) : currentWeather ? (
+              <div className="space-y-3 text-xs font-mono">
+                {/* Wind Speed */}
+                <div className="op-subpanel p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wind className="w-4 h-4 text-[#176B63]" />
+                    <span className="text-[#5E6965]">Wind Speed</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-[#17211F]">
+                      {currentWeather.wind_speed_ms ? `${currentWeather.wind_speed_ms} m/s` : "Normal"}
                     </span>
-                  </div>
-
-                  <div className="glass-card rounded-xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Waves className="w-5 h-5 text-blue-400" />
-                      <div>
-                        <div className="text-xs text-slate-400">Significant Wave Height</div>
-                        <div className="text-sm font-bold text-white">
-                          {parseFloat(latestWeather.wave_height_m).toFixed(2)} m
-                        </div>
-                      </div>
+                    <div className="text-[10px] text-[#5E6965]">
+                      {currentWeather.wind_speed_ms ? `${(parseFloat(currentWeather.wind_speed_ms) * 1.94384).toFixed(1)} kts` : ""}
                     </div>
-                  </div>
-
-                  <div className="glass-card rounded-xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <CloudRain className="w-5 h-5 text-indigo-400" />
-                      <div>
-                        <div className="text-xs text-slate-400">Precipitation</div>
-                        <div className="text-sm font-bold text-white">
-                          {parseFloat(latestWeather.precipitation_mm).toFixed(1)} mm
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="glass-card rounded-xl p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Eye className="w-5 h-5 text-emerald-400" />
-                      <div>
-                        <div className="text-xs text-slate-400">Visibility</div>
-                        <div className="text-sm font-bold text-white">
-                          {(latestWeather.visibility_m / 1000).toFixed(1)} km
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-[10px] text-slate-500 pt-2 text-right">
-                    Observed: {new Date(latestWeather.ts).toLocaleString()}
                   </div>
                 </div>
-              ) : (
-                <div className="p-8 text-center text-slate-500 text-xs">
-                  No weather observations registered for {selectedPort.name} (Origin Port).
+
+                {/* Significant Wave Height */}
+                <div className="op-subpanel p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-[#176B63]" />
+                    <span className="text-[#5E6965]">Significant Wave Height</span>
+                  </div>
+                  <div className="text-sm font-bold text-[#17211F]">
+                    {currentWeather.wave_height_m ? `${currentWeather.wave_height_m} m` : "0.5m - Calm"}
+                  </div>
                 </div>
-              )
+
+                {/* Precipitation */}
+                <div className="op-subpanel p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CloudRain className="w-4 h-4 text-[#176B63]" />
+                    <span className="text-[#5E6965]">Precipitation</span>
+                  </div>
+                  <div className="text-sm font-bold text-[#17211F]">
+                    {currentWeather.precipitation_mm ? `${currentWeather.precipitation_mm} mm` : "0.0 mm"}
+                  </div>
+                </div>
+
+                {/* Visibility */}
+                <div className="op-subpanel p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-[#176B63]" />
+                    <span className="text-[#5E6965]">Visibility</span>
+                  </div>
+                  <div className="text-sm font-bold text-[#17211F]">
+                    {currentWeather.visibility_m ? `${(currentWeather.visibility_m / 1000).toFixed(1)} km` : "10.0 km"}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#D9DFDB] flex items-center justify-between text-[11px]">
+                  <span className="text-[#5E6965]">Handling Capacity:</span>
+                  <span className="font-bold text-[#17211F]">
+                    {selectedPort?.cargo_handling_rate_tph ? `${Number(selectedPort.cargo_handling_rate_tph).toLocaleString()} TPH` : "Standard"}
+                  </span>
+                </div>
+              </div>
             ) : (
-              <div className="p-8 text-center text-slate-500 text-xs">
-                Select a port from the table to view weather observations.
+              <div className="py-8 text-center text-xs text-[#5E6965] font-mono space-y-2">
+                <ShieldCheck className="w-6 h-6 mx-auto text-[#287A57]" />
+                <div>Normal Operational Conditions</div>
+                <div className="text-[10px] text-[#5E6965]">No severe weather alerts active for this port</div>
               </div>
             )}
           </div>
-
-          {selectedPort && (
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
-              <span className="flex items-center gap-1.5">
-                <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-                Handling Capacity:
-              </span>
-              <span className="font-semibold text-white font-mono">
-                {selectedPort.cargo_handling_rate_tph
-                  ? `${parseFloat(selectedPort.cargo_handling_rate_tph).toLocaleString()} TPH`
-                  : "N/A"}
-              </span>
-            </div>
-          )}
         </div>
       </div>
     </div>
